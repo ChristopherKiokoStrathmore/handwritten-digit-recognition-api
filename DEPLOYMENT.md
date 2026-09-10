@@ -7,7 +7,7 @@
 | **Service ID** | `srv-dah81kp42hec73f6otu0` |
 | **Source repo** | https://github.com/ChristopherKiokoStrathmore/handwritten-digit-recognition-api |
 | **Branch** | `main` |
-| **Deployed commit** | `472f9426de6f5c9c0a08d2c44df747ee7e629da0` |
+| **Deployed commit** | `a5350f8c9eafe156769c906eca7908b032c9361f` (deploy `dep-dah87amq1p3s73b1r780`) |
 | **Image** | `python:3.11-slim` base, 423,029,645 bytes (403 MiB) on disk, built and verified locally before deploying |
 | **Model in image** | `models/final_fc_model.keras`, 6,459,888 bytes, saved by Keras 3.13.2 |
 | **Runtime** | TensorFlow-CPU 2.21.0 / Keras 3.15.1, FastAPI 0.128.0, uvicorn 0.40.0 |
@@ -56,7 +56,9 @@ is in `deployment_evidence/request_digit_used.json` and in `sample_digit.json`.
 # build the request body from the committed fixture
 python -c "import json;d=json.load(open('sample_digit.json'));open('digit.json','w').write(json.dumps({'pixels':d['pixels']}))"
 
-curl -X POST https://mnist-live.onrender.com/predict      -H "Content-Type: application/json"      --data @digit.json
+curl -X POST https://mnist-live.onrender.com/predict \
+     -H "Content-Type: application/json" \
+     --data @digit.json
 ```
 
 ```json
@@ -68,7 +70,9 @@ Predicted 7, matching the true label, at full confidence.
 ### 3. A malformed request is refused rather than guessed at
 
 ```bash
-curl -X POST https://mnist-live.onrender.com/predict      -H "Content-Type: application/json"      -d '{"pixels": [[0,0],[0,0]]}'
+curl -X POST https://mnist-live.onrender.com/predict \
+     -H "Content-Type: application/json" \
+     -d '{"pixels": [[0,0],[0,0]]}'
 ```
 
 ```json
@@ -130,8 +134,24 @@ and is routed to human_review rather than asserted, which is the intended behavi
 
 ## Reproducing the deployment
 
-`render.yaml` describes the service. With the repo connected to Render, a push to
-`main` triggers an automatic rebuild (`autoDeploy: true`).
+`render.yaml` describes the service, so it can be recreated from this repo.
+
+### Redeploying after a push
+
+The service was created from the public repo URL rather than through Render's
+GitHub app, so no webhook is installed and **a push to `main` does not rebuild the
+service on its own**, despite `autoDeploy` being set. Either install the Render
+GitHub app on the repository to enable it, or trigger a build explicitly:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}' \
+  https://api.render.com/v1/services/srv-dah81kp42hec73f6otu0/deploys
+```
+
+Or use the **Manual Deploy** button in the Render dashboard.
 
 ## Known limitation
 
