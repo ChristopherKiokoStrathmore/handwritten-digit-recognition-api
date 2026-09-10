@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNIST Live — Draw a Digit</title>
+<style>
+/* ---------------------------------------------------------------
+   Design tokens. Every colour is declared once, here, so the whole
+   page can be re-themed by editing this block alone.
+   --------------------------------------------------------------- */
+:root {
+  --bg:          #070b14;
+  --bg-glow-a:   #1d4ed8;
+  --bg-glow-b:   #7c3aed;
+  --surface:     rgba(20, 29, 48, 0.72);
+  --surface-2:   rgba(31, 43, 68, 0.65);
+  --border:      rgba(120, 149, 202, 0.16);
+  --border-lit:  rgba(120, 149, 202, 0.34);
+  --text:        #e8eefb;
+  --text-dim:    #8fa0be;
+  --text-faint:  #5f7092;
+  --accent:      #4f8dff;
+  --accent-2:    #22d3ee;
+  --good:        #34d399;
+  --warn:        #fbbf24;
+  --bad:         #f87171;
+  --radius:      16px;
+  --ease:        cubic-bezier(.22,.68,.36,1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 40px);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+/* Two soft colour washes behind everything. Pure decoration, zero markup cost. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -30vh -10vw;
+  z-index: -1;
+  background:
+    radial-gradient(38vw 38vw at 18% 8%,  rgba(29, 78, 216, .26), transparent 70%),
+    radial-gradient(34vw 34vw at 86% 78%, rgba(124, 58, 237, .22), transparent 70%);
+  filter: blur(12px);
+  pointer-events: none;
+}
+
+.wrap { width: 100%; max-width: 1080px; }
+
+/* ---------------------------------------------------------------
+   Header
+   --------------------------------------------------------------- */
+header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(24px, 3.4vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(96deg, #ffffff 12%, var(--accent) 62%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tagline { margin-top: 5px; font-size: 14px; color: var(--text-dim); }
+
+/* Live server indicator — turns green once /health answers. */
+.status {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); flex: none; }
+.status.online .dot { background: var(--good); animation: pulse 2.4s infinite; }
+.status.offline .dot { background: var(--bad); }
+.status.online  { color: var(--text); }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, .6); }
+  70%  { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+/* ---------------------------------------------------------------
+   Layout — two columns on desktop, stacked on mobile
+   --------------------------------------------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px -22px rgba(0,0,0,.85);
+}
+.panel-title {
+  font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-faint); margin-bottom: 14px;
+}
+
+/* ---------------------------------------------------------------
+   Drawing pad
+   --------------------------------------------------------------- */
+.pad-frame {
+  position: relative;
+  border-radius: 12px;
+  padding: 3px;
+  background: linear-gradient(140deg, var(--border-lit), transparent 45%, var(--border-lit));
+  transition: box-shadow .35s var(--ease);
+}
+.pad-frame.inking { box-shadow: 0 0 0 4px rgba(79, 141, 255, .16); }
+canvas#pad {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
+  background: #000;
+  border-radius: 10px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Faint "draw here" watermark, hidden the moment a stroke lands. */
+.pad-hint {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; gap: 8px; justify-items: center;
+  color: var(--text-faint); font-size: 13px; pointer-events: none;
+  transition: opacity .3s var(--ease);
+}
+.pad-hint svg { opacity: .5; }
+.pad-frame.dirty .pad-hint { opacity: 0; }
+
+.controls { display: flex; gap: 10px; margin-top: 14px; }
+button {
+  flex: 1;
+  font: inherit; font-size: 14.5px; font-weight: 600;
+  padding: 12px 18px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: transform .15s var(--ease), box-shadow .25s var(--ease), background .2s, opacity .2s;
+}
+button:active { transform: translateY(1px) scale(.99); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.btn-predict {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #6366f1);
+  box-shadow: 0 10px 26px -12px var(--accent);
+}
+.btn-predict:hover:not(:disabled) { box-shadow: 0 14px 30px -10px var(--accent); }
+.btn-clear {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.btn-clear:hover { color: var(--text); border-color: var(--border-lit); }
+kbd {
+  font: inherit; font-size: 11px;
+  padding: 1px 5px; margin-left: 7px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.13);
+  border: 1px solid rgba(255,255,255,.14);
+}
+
+/* The 28x28 the model actually receives */
+.model-view { display: flex; align-items: center; gap: 13px; margin-top: 16px; }
+.model-view canvas {
+  width: 66px; height: 66px;
+  image-rendering: pixelated;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #000;
+  flex: none;
+}
+.model-view .label { font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+.model-view .label b { color: var(--text-dim); font-weight: 600; display: block; }
+
+.tip {
+  margin-top: 16px; padding-top: 15px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px; line-height: 1.6; color: var(--text-faint);
+}
+.tip b { color: var(--text-dim); }
+
+/* ---------------------------------------------------------------
+   Result panel
+   --------------------------------------------------------------- */
+#empty { text-align: center; padding: 54px 20px; color: var(--text-faint); }
+#empty .glyph { font-size: 46px; opacity: .28; margin-bottom: 12px; }
+#empty p { margin: 0; font-size: 13.5px; line-height: 1.6; }
+
+#result { animation: rise .45s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.verdict { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+
+/* Confidence ring drawn in SVG; the arc length animates via stroke-dashoffset. */
+.ring { position: relative; width: 132px; height: 132px; flex: none; }
+.ring svg { transform: rotate(-90deg); display: block; }
+.ring .track { stroke: rgba(255,255,255,.07); }
+.ring .arc { stroke: url(#ringGrad); stroke-linecap: round; transition: stroke-dashoffset .9s var(--ease); }
+.ring .digit {
+  position: absolute; inset: 0;
+  display: grid; place-content: center;
+  font-size: 56px; font-weight: 800; letter-spacing: -.04em;
+  background: linear-gradient(160deg, #fff, var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+.verdict-meta { flex: 1; min-width: 190px; }
+.conf-num { font-size: 30px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.conf-num span { font-size: 15px; font-weight: 500; color: var(--text-dim); margin-left: 3px; }
+.conf-label { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  margin-top: 12px; padding: 7px 13px;
+  font-size: 12.5px; font-weight: 600;
+  border-radius: 999px; border: 1px solid;
+}
+.badge.auto   { color: var(--good); background: rgba(52, 211, 153, .11); border-color: rgba(52, 211, 153, .32); }
+.badge.review { color: var(--warn); background: rgba(251, 191, 36, .11); border-color: rgba(251, 191, 36, .32); }
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.chip {
+  font-size: 11.5px; color: var(--text-faint);
+  padding: 5px 11px; border-radius: 7px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.chip b { color: var(--text-dim); font-weight: 600; }
+
+/* ---------------------------------------------------------------
+   Probability bars
+   --------------------------------------------------------------- */
+.bars { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+.bar-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 54px;
+  align-items: center; gap: 12px;
+  padding: 3px 0;
+}
+.bar-label { font-size: 14px; font-weight: 600; color: var(--text-faint); text-align: center; font-variant-numeric: tabular-nums; }
+.bar-track { height: 9px; background: rgba(255,255,255,.05); border-radius: 999px; overflow: hidden; }
+.bar-fill {
+  height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79, 141, 255, .55), var(--accent));
+  transition: width .8s var(--ease);
+}
+.bar-val { font-size: 12px; color: var(--text-faint); text-align: right; font-variant-numeric: tabular-nums; }
+.bar-row.top .bar-label { color: var(--text); }
+.bar-row.top .bar-val   { color: var(--text); font-weight: 600; }
+.bar-row.top .bar-fill  { background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 14px -2px var(--accent); }
+
+/* ---------------------------------------------------------------
+   Error toast
+   --------------------------------------------------------------- */
+#toast {
+  position: fixed; left: 50%; bottom: 26px;
+  transform: translate(-50%, calc(100% + 40px));
+  opacity: 0;
+  visibility: hidden;
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 13px 18px;
+  font-size: 13.5px; line-height: 1.45;
+  color: var(--text);
+  background: rgba(38, 20, 26, .93);
+  border: 1px solid rgba(248, 113, 113, .42);
+  border-radius: 12px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 44px -16px rgba(0,0,0,.9);
+  transition: transform .4s var(--ease), opacity .3s var(--ease), visibility .4s;
+  z-index: 50;
+}
+#toast.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
+#toast .x { color: var(--bad); font-size: 16px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>MNIST Live</h1>
+      <div class="tagline">Draw a digit. The neural network you trained reads it in real time.</div>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">connecting…</span></div>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ LEFT: the drawing surface ============ -->
+    <section class="panel">
+      <div class="panel-title">Input</div>
+
+      <div class="pad-frame" id="padFrame">
+        <canvas id="pad" width="560" height="560"></canvas>
+        <div class="pad-hint">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/>
+          </svg>
+          <span>draw a digit here</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn-predict" id="btnPredict" onclick="predict()">Predict<kbd>&#8629;</kbd></button>
+        <button class="btn-clear" onclick="clearPad()">Clear<kbd>C</kbd></button>
+      </div>
+
+      <div class="model-view">
+        <canvas id="mini" width="28" height="28"></canvas>
+        <div class="label">
+          <b>What the model sees</b>
+          28&times;28 grayscale, scaled to 0&ndash;1, flattened to 784 inputs.
+        </div>
+      </div>
+
+      <div class="tip">
+        <b>Draw big and centred</b>, filling most of the box, with thick strokes &mdash;
+        that is how MNIST was written. A thin digit in a corner will confuse it, and
+        that mismatch between training data and real input is a production lesson,
+        not a bug.
+      </div>
+    </section>
+
+    <!-- ============ RIGHT: the prediction ============ -->
+    <section class="panel">
+      <div class="panel-title">Prediction</div>
+
+      <div id="empty">
+        <div class="glyph">&#9676;</div>
+        <p>No prediction yet.<br>Draw a digit on the left and hit Predict.</p>
+      </div>
+
+      <div id="result" hidden>
+        <div class="verdict">
+          <div class="ring">
+            <svg width="132" height="132">
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%"   stop-color="#4f8dff"/>
+                  <stop offset="100%" stop-color="#22d3ee"/>
+                </linearGradient>
+              </defs>
+              <circle class="track" cx="66" cy="66" r="58" fill="none" stroke-width="9"/>
+              <circle class="arc" id="arc" cx="66" cy="66" r="58" fill="none" stroke-width="9"
+                      stroke-dasharray="364.4" stroke-dashoffset="364.4"/>
+            </svg>
+            <div class="digit" id="digit">&ndash;</div>
+          </div>
+
+          <div class="verdict-meta">
+            <div class="conf-num" id="confNum">&ndash;<span>%</span></div>
+            <div class="conf-label">confidence in this reading</div>
+            <div class="badge auto" id="badge">&ndash;</div>
+            <div class="chips">
+              <div class="chip"><b id="latency">&ndash;</b> ms round trip</div>
+              <div class="chip">threshold <b>60%</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bars" id="bars"></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast"><span class="x">&#10005;</span><span id="toastMsg"></span></div>
+
+<script>
+const pad      = document.getElementById('pad');
+const padFrame = document.getElementById('padFrame');
+const ctx      = pad.getContext('2d');
+const CIRCUM   = 2 * Math.PI * 58;   // ring circumference, for the dash animation
+
+let drawing = false, dirty = false, last = null;
+
+/* ---------- canvas setup ---------------------------------------------- */
+function resetInk() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, pad.width, pad.height);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 42;          // thick, like MNIST pen strokes (canvas is 560px)
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+}
+
+function clearPad() {
+  resetInk();
+  dirty = false;
+  padFrame.classList.remove('dirty');
+  document.getElementById('result').hidden = true;
+  document.getElementById('empty').style.display = '';
+  const m = document.getElementById('mini').getContext('2d');
+  m.fillStyle = '#000';
+  m.fillRect(0, 0, 28, 28);
+}
+clearPad();
+
+/* ---------- drawing ---------------------------------------------------- */
+// Pointer events cover mouse, pen and touch in one code path.
+function posOf(e) {
+  const r = pad.getBoundingClientRect();
+  // The canvas is displayed smaller than its 560px backing store, so scale up.
+  return {
+    x: (e.clientX - r.left) * (pad.width  / r.width),
+    y: (e.clientY - r.top)  * (pad.height / r.height)
+  };
+}
+
+pad.addEventListener('pointerdown', function (e) {
+  drawing = true;
+  last = posOf(e);
+  pad.setPointerCapture(e.pointerId);
+  padFrame.classList.add('inking', 'dirty');
+  dirty = true;
+  // A dot, so a single tap still leaves a mark.
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+});
+
+pad.addEventListener('pointermove', function (e) {
+  if (!drawing) return;
+  const p = posOf(e);
+  // Quadratic curve through the midpoint — smoother than straight lineTo segments.
+  const mid = { x: (last.x + p.x) / 2, y: (last.y + p.y) / 2 };
+  ctx.beginPath();
+  ctx.moveTo(last.x, last.y);
+  ctx.quadraticCurveTo(last.x, last.y, mid.x, mid.y);
+  ctx.stroke();
+  last = mid;
+});
+
+function stopDraw() { drawing = false; padFrame.classList.remove('inking'); }
+pad.addEventListener('pointerup', stopDraw);
+pad.addEventListener('pointercancel', stopDraw);
+pad.addEventListener('pointerleave', stopDraw);
+
+/* ---------- keyboard ---------------------------------------------------- */
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); predict(); }
+  if (e.key === 'c' || e.key === 'C') clearPad();
+});
+
+/* ---------- downscale to the 28x28 the model expects -------------------- */
+function get28x28() {
+  const small = document.createElement('canvas');
+  small.width = 28;
+  small.height = 28;
+  const sctx = small.getContext('2d', { willReadFrequently: true });
+  sctx.imageSmoothingEnabled = true;
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(pad, 0, 0, 28, 28);      // the browser does the box-averaging
+  const data = sctx.getImageData(0, 0, 28, 28).data;
+
+  // Mirror it into the visible preview.
+  const mctx = document.getElementById('mini').getContext('2d');
+  mctx.imageSmoothingEnabled = false;
+  mctx.drawImage(small, 0, 0, 28, 28);
+
+  // White ink on black, so the red channel already is the brightness.
+  const grid = [];
+  for (let y = 0; y < 28; y++) {
+    const row = [];
+    for (let x = 0; x < 28; x++) row.push(data[(y * 28 + x) * 4]);
+    grid.push(row);
+  }
+  return grid;
+}
+
+/* ---------- talk to the API --------------------------------------------- */
+async function predict() {
+  if (!dirty) { toast('Draw a digit first.'); return; }
+  const btn = document.getElementById('btnPredict');
+  btn.disabled = true;
+
+  const pixels = get28x28();
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pixels: pixels })
+    });
+    const ms = Math.round(performance.now() - t0);
+    if (!res.ok) {
+      const err = await res.json().catch(function () { return {}; });
+      toast('Prediction rejected: ' + (err.detail || res.status));
+      return;
+    }
+    showResult(await res.json(), ms);
+  } catch (err) {
+    toast('Could not reach the API. Is the server still running?');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showResult(out, ms) {
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('result').hidden = false;
+
+  document.getElementById('digit').textContent = out.predicted_digit;
+  document.getElementById('latency').textContent = ms;
+
+  const pct = out.confidence * 100;
+  document.getElementById('confNum').innerHTML = pct.toFixed(1) + '<span>%</span>';
+
+  // Animate the ring from empty each time, so repeat predictions still feel live.
+  const arc = document.getElementById('arc');
+  arc.style.transition = 'none';
+  arc.style.strokeDashoffset = CIRCUM;
+  arc.getBoundingClientRect();                       // force reflow
+  arc.style.transition = '';
+  arc.style.strokeDashoffset = CIRCUM * (1 - out.confidence);
+
+  const badge = document.getElementById('badge');
+  const auto  = out.route === 'auto';
+  badge.className = 'badge ' + (auto ? 'auto' : 'review');
+  badge.textContent = auto
+    ? '✓ Confident — trusted automatically'
+    : '⚠ Too unsure — routed to a human';
+
+  // Ten bars, animating from zero.
+  const bars = document.getElementById('bars');
+  bars.innerHTML = '';
+  out.all_probabilities.forEach(function (p, d) {
+    const row = document.createElement('div');
+    row.className = 'bar-row' + (d === out.predicted_digit ? ' top' : '');
+    row.innerHTML =
+      '<div class="bar-label">' + d + '</div>' +
+      '<div class="bar-track"><div class="bar-fill"></div></div>' +
+      '<div class="bar-val">' + (p * 100).toFixed(1) + '%</div>';
+    bars.appendChild(row);
+    requestAnimationFrame(function () {
+      row.querySelector('.bar-fill').style.width =
+        (p > 0 ? Math.max(p * 100, 1.5) : 0) + '%';
+    });
+  });
+}
+
+/* ---------- toast -------------------------------------------------------- */
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.classList.remove('show'); }, 4200);
+}
+
+/* ---------- health check ------------------------------------------------- */
+(async function () {
+  const box = document.getElementById('status');
+  const txt = document.getElementById('statusText');
+  try {
+    const h = await fetch('/health').then(function (r) { return r.json(); });
+    box.className = 'status online';
+    txt.textContent = 'model online · ' + String(h.model).split(/[\\/]/).pop();
+  } catch (e) {
+    box.className = 'status offline';
+    txt.textContent = 'server unreachable';
+  }
+})();
+</script>
+</body>
+</html>
