@@ -30,7 +30,8 @@ dist/
 .ruff_cache/
 .ipynb_checkpoints/
 
-# ---- Editors / OS ----
+# ---- Editors / OS / local tooling ----
+.claude/
 .vscode/
 .idea/
 .DS_Store
