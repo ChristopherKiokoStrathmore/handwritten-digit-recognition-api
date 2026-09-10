@@ -139,6 +139,7 @@ python smoke_test.py https://mnist-live.onrender.com
 ## Layout
 
 ```
+├── DSA8401_Neural_Networks_MNIST.ipynb   the full study: training, analysis, and deployment
 ├── serve.py               FastAPI app: loads the model once at startup, serves /health and /predict
 ├── preprocessing.py       THE shared transform — imported by both training and serving
 ├── smoke_test.py          end-to-end check against any running instance
@@ -147,9 +148,34 @@ python smoke_test.py https://mnist-live.onrender.com
 │   └── final_fc_model.keras
 ├── static/index.html      draw-a-digit front end, calls /predict with relative URLs
 ├── Dockerfile             python:3.11-slim, non-root, listens on 7860
+├── render.yaml            Render service definition
 ├── requirements.txt       exact pins, CPU-only TensorFlow
 └── DEPLOYMENT.md          live URL, commit SHA, and verified curl transcripts
 ```
+
+## The notebook
+
+`DSA8401_Neural_Networks_MNIST.ipynb` is the study behind the model, and it is the
+reason the service exists rather than the other way round:
+
+| Section | What it establishes |
+|---|---|
+| 1 | Data preparation, and why scaling to [0, 1] matters for gradient training |
+| 2 | Fully connected architectures built from first principles; depth sweep, and shallow/wide vs deep/narrow at matched parameter counts |
+| 3 | ReLU vs sigmoid, and vanishing gradients observed directly in a deep sigmoid net |
+| 4 | Weight initialisation, including a direct proof of zero-init symmetry |
+| 5 | Optimisers, and a learning-rate x batch-size sweep |
+| 6 | Regularisation, and an honest measure of how much MNIST actually overfits |
+| 7 | The selected fully connected model, evaluated on the sealed test set (~98%) |
+| 8 | A LeNet-style CNN benchmark (~99% with fewer parameters) and an error-pattern comparison |
+| 9 | The production system design, following Huyen's lifecycle |
+| 10 | **The deployed service, called live over HTTP from the notebook itself** |
+
+Section 10 sends sealed test-set digits to the running API and scores the replies.
+Nine of ten come back correct; the tenth is read as an 8 at 0.5401 confidence, below
+the 0.60 threshold, so it is routed to `human_review` instead of being asserted.
+That is the same 3/8 confusion the matrix in Section 7.3 predicted, caught in
+production by the mechanism designed for it in Section 9.
 
 ## Deployment
 
