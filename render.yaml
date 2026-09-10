@@ -1,0 +1,21 @@
+# Render blueprint. Deploys the Dockerfile as a public web service.
+# Render injects $PORT at runtime; the Dockerfile's CMD honours it.
+services:
+  - type: web
+    name: mnist-live
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Keep TensorFlow's thread pools small: the free instance has 512 MB.
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: TF_NUM_INTRAOP_THREADS
+        value: "1"
+      - key: TF_NUM_INTEROP_THREADS
+        value: "1"
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "2"

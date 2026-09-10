@@ -1,0 +1,9 @@
+fixture: sample_digit.json  (MNIST test set index 0)  true label = 7
+GET  http://localhost:7860/health -> 200 {"status": "ok", "model": "/app/models/final_fc_model.keras"}
+POST http://localhost:7860/predict -> 200
+     predicted_digit = 7
+     confidence      = 1.0
+     route           = auto
+POST http://localhost:7860/predict (bad 32x32 shape) -> 422 (correctly refused)
+
+SMOKE TEST PASSED — all checks green.
