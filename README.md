@@ -15,9 +15,9 @@ A fully-connected neural network trained on MNIST, served as a live REST API wit
 draw-a-digit web front end. The model artifact ships **inside** the container, so the
 service has no runtime dependency on any model registry or object store.
 
-**Live demo:** https://kioko1-mnist-live.hf.space
-**Draw a digit:** https://kioko1-mnist-live.hf.space/
-**Interactive API docs:** https://kioko1-mnist-live.hf.space/docs
+**Live demo:** https://mnist-live.onrender.com
+**Draw a digit:** https://mnist-live.onrender.com/
+**Interactive API docs:** https://mnist-live.onrender.com/docs
 
 ---
 
@@ -92,13 +92,13 @@ it received. Malformed JSON returns 422 from FastAPI's own validation.
 ### Try it
 
 ```bash
-curl https://kioko1-mnist-live.hf.space/health
+curl https://mnist-live.onrender.com/health
 
 python - <<'PY' > digit.json
 import json; d = json.load(open("sample_digit.json")); print(json.dumps({"pixels": d["pixels"]}))
 PY
 
-curl -X POST https://kioko1-mnist-live.hf.space/predict \
+curl -X POST https://mnist-live.onrender.com/predict \
      -H "Content-Type: application/json" \
      --data @digit.json
 ```
@@ -131,7 +131,7 @@ refused with 422. Exit code 0 only if everything passes.
 
 ```bash
 python smoke_test.py                                   # defaults to localhost:7860
-python smoke_test.py https://kioko1-mnist-live.hf.space
+python smoke_test.py https://mnist-live.onrender.com
 ```
 
 ---
@@ -153,9 +153,17 @@ python smoke_test.py https://kioko1-mnist-live.hf.space
 
 ## Deployment
 
-Hugging Face Spaces, Docker SDK. The container listens on 7860, which matches the
-`app_port` declared in the front matter above. `DEPLOYMENT.md` records the live URL,
-the deployed commit SHA, and the exact verification commands with their real responses.
+Deployed on **Render** (free tier) as a Docker web service, built from the `Dockerfile`
+in this repo. Render injects `$PORT` at runtime and the container honours it, falling
+back to 7860 — the port Hugging Face Spaces expects and the `app_port` declared in the
+front matter above — so the same image runs on either host without modification.
+
+`DEPLOYMENT.md` records the live URL, the deployed commit SHA, and the exact
+verification commands with their real responses.
+
+> The free instance sleeps after 15 minutes of inactivity. The first request after a
+> sleep takes roughly 50 seconds while the container restarts and TensorFlow reloads
+> the model; subsequent requests are fast.
 
 ## License
 

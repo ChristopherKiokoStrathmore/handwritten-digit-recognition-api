@@ -1,0 +1,15 @@
+All ten digits sent to the live API (first test-set example of each):
+
+  test idx     3  true 0 -> predicted 0  conf 0.9999  auto         OK
+  test idx     2  true 1 -> predicted 1  conf 0.9998  auto         OK
+  test idx     1  true 2 -> predicted 2  conf 1.0000  auto         OK
+  test idx    18  true 3 -> predicted 8  conf 0.5401  human_review MISS
+  test idx     4  true 4 -> predicted 4  conf 0.9998  auto         OK
+  test idx     8  true 5 -> predicted 5  conf 0.9932  auto         OK
+  test idx    11  true 6 -> predicted 6  conf 1.0000  auto         OK
+  test idx     0  true 7 -> predicted 7  conf 1.0000  auto         OK
+  test idx    61  true 8 -> predicted 8  conf 0.9806  auto         OK
+  test idx     7  true 9 -> predicted 9  conf 0.9999  auto         OK
+
+9/10 correct. The single miss falls below the 0.60 confidence threshold
+and is routed to human_review rather than asserted, which is the intended behaviour.

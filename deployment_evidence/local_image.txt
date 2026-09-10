@@ -1,1 +1,4 @@
+docker images column (includes buildx attestation manifests):
 mnist-live:latest  99492e33eadb  2.21GB
+actual single-platform image size (docker image inspect):
+  403 MB (423029645 bytes)

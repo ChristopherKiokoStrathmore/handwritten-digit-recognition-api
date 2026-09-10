@@ -6,4 +6,4 @@ POST http://localhost:7860/predict -> 200
      route           = auto
 POST http://localhost:7860/predict (bad 32x32 shape) -> 422 (correctly refused)
 
-SMOKE TEST PASSED — all checks green.
+SMOKE TEST PASSED - all checks green.

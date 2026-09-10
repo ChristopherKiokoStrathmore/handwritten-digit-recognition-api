@@ -1,5 +1,5 @@
 """
-smoke_test.py — proves a running instance actually works, end to end.
+smoke_test.py - proves a running instance actually works, end to end.
 
 It loads one real MNIST digit from sample_digit.json, calls /health and
 /predict, and checks the response against the true label.
@@ -10,7 +10,7 @@ Usage:
     python smoke_test.py https://kioko1-mnist-live.hf.space
 
 Exit code is 0 only if every check passes, so CI can gate on it.
-Standard library only — nothing to install, nothing extra in the image.
+Standard library only - nothing to install, nothing extra in the image.
 """
 
 import json
@@ -18,6 +18,16 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# Some machines run TLS-intercepting antivirus whose root CA the OS trusts but
+# OpenSSL rejects. truststore delegates verification to the OS and fixes that.
+# Optional: if it is not installed, verification just falls back to OpenSSL.
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
 
 DEFAULT_BASE = "http://localhost:7860"
 TIMEOUT = 60  # a cold container has to load TensorFlow before it can answer
@@ -107,7 +117,7 @@ def main():
         for f in failures:
             print("  -", f)
         return 1
-    print("SMOKE TEST PASSED — all checks green.")
+    print("SMOKE TEST PASSED - all checks green.")
     return 0
 
 
