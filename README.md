@@ -6,9 +6,9 @@ The fully connected network reaches ~98% on the sealed test set; the LeNet-style
 
 **Live demo:** https://mnist-live.onrender.com - the first load can take up to a minute (free-tier cold start).
 
-![Drawing a digit and reading the prediction](docs/draw-a-digit.gif)
-
 # Handwritten Digit Recognition API
+
+![Ink goes in. A digit and a confidence come back.](assets/hero.png)
 
 A fully-connected neural network trained on MNIST, served as a live REST API with a
 draw-a-digit web front end. The model artifact ships **inside** the container, so the
@@ -17,6 +17,20 @@ service has no runtime dependency on any model registry or object store.
 **Live demo:** https://mnist-live.onrender.com
 **Draw a digit:** https://mnist-live.onrender.com/
 **Interactive API docs:** https://mnist-live.onrender.com/docs
+
+## Demo
+
+The clip is the draw-a-digit page running locally (`uvicorn serve:app` on port 7860).
+Two real MNIST test images are placed on the pad and posted to `/predict`.
+
+Test index 0 is a 7. The API returns `predicted_digit` 7, `confidence` 1.0,
+`route` `auto`. Test index 18 is a 3. The API returns 8 at confidence 0.5401,
+and because that is under 0.60 the route is `human_review`. The page prints
+confidence as a percentage to one decimal place, so 0.5401 appears as 54.0%.
+
+![Two real MNIST digits sent to the local API](assets/demo.gif)
+
+![Drawing a digit and reading the prediction](docs/draw-a-digit.gif)
 
 ---
 
@@ -140,6 +154,11 @@ python smoke_test.py https://mnist-live.onrender.com
 ## Layout
 
 ```
+├── assets/hero.png            story poster: problem, pipeline, measured result
+├── assets/demo.gif            local draw-a-digit session, two real test images
+├── assets/confusion-matrix.png   committed model on the 10,000 test images
+├── assets/top-confusions.png  largest off-diagonal counts from that matrix
+├── assets/social-preview.png  1280x640 sharing card, not shown on this page
 ├── DSA8401_Neural_Networks_MNIST.ipynb   the full study: training, analysis, and deployment
 ├── serve.py               FastAPI app: loads the model once at startup, serves /health and /predict
 ├── preprocessing.py       THE shared transform - imported by both training and serving
@@ -180,6 +199,18 @@ Nine of ten come back correct; the tenth is read as an 8 at 0.5401 confidence, b
 the 0.60 threshold, so it is routed to `human_review` instead of being asserted.
 That is the same 3/8 confusion the matrix in Section 7.3 predicted, caught in
 production by the mechanism designed for it in Section 9.
+
+The charts below are `models/final_fc_model.keras` evaluated on the 10,000 MNIST
+test images: 9,827 correct, accuracy 0.9827, test loss 0.1304.
+
+![Confusion matrix on the sealed test set](assets/confusion-matrix.png)
+
+*Rows are the true digit, columns the predicted digit. 9,827 of 10,000 land on the diagonal.*
+
+![Most common mistakes on the sealed test set](assets/top-confusions.png)
+
+*Off-diagonal counts from that matrix. The most common mistake is a 1 read as an 8
+(15 images). A 3 read as an 8, the miss in the live check above, happens 4 times.*
 
 ## Deployment
 
