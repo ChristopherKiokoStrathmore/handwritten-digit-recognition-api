@@ -27,8 +27,11 @@ This was confirmed to be a plan limit and not a permissions problem: the same to
 creates a **static** Space successfully (HTTP 200) and only `sdk: docker` is refused.
 The account reports `isPro: false`.
 
-The Hugging Face front matter and the 7860 default are deliberately left in place, so
-if the account is upgraded later this same repo deploys to Spaces unchanged.
+The Hugging Face Space card metadata is in `README.spaces.md` (`sdk: docker`,
+`app_port: 7860`), same values as before. Hugging Face reads that block only when
+it is the first thing in `README.md`. It is kept in the Spaces file so GitHub does
+not render it as a table above the introduction. Prepend `README.spaces.md` to
+`README.md` before creating a Docker Space. The image still defaults to port 7860.
 
 ## Verification
 

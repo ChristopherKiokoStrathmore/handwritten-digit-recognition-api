@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Build the Docker image
+        run: docker build -t mnist-live .
+
+      - name: Start the container
+        run: docker run -d --name mnist-live -p 7860:7860 mnist-live
+
+      - name: Wait until health responds
+        run: |
+          for i in $(seq 1 90); do
+            if ! docker ps --filter name=mnist-live --filter status=running -q | grep -q .; then
+              echo "container exited before it became healthy"
+              docker logs mnist-live
+              exit 1
+            fi
+            if curl -sf http://127.0.0.1:7860/health; then
+              echo
+              echo "healthy after ${i} tries"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "container did not become healthy"
+          docker logs mnist-live
+          exit 1
+
+      - name: Run smoke_test.py
+        run: python smoke_test.py http://127.0.0.1:7860
+
+      - name: Collect container logs
+        if: always()
+        run: docker logs mnist-live

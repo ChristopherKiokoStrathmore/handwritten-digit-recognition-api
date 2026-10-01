@@ -5,7 +5,7 @@
 FROM python:3.11-slim
 
 # 7860 is the port Hugging Face Spaces expects a Docker Space to listen on, and it
-# is declared as app_port in the README front matter; the two must agree. Hosts that
+# is declared as app_port in README.spaces.md; the two must agree. Hosts that
 # inject their own $PORT (Render) override it at runtime.
 # The thread limits keep TensorFlow's memory footprint down on small free instances.
 ENV PYTHONUNBUFFERED=1 \

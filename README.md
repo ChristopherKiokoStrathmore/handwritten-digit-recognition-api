@@ -1,13 +1,12 @@
----
-title: MNIST Live — Handwritten Digit Recognition API
-emoji: ✏️
-colorFrom: indigo
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
+The fully connected network reaches ~98% on the sealed test set; the LeNet-style CNN benchmark reaches ~99% with fewer parameters.
+
+[![CI](https://github.com/ChristopherKiokoStrathmore/handwritten-digit-recognition-api/actions/workflows/ci.yml/badge.svg)](https://github.com/ChristopherKiokoStrathmore/handwritten-digit-recognition-api/actions/workflows/ci.yml)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](Dockerfile)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+**Live demo:** https://mnist-live.onrender.com - the first load can take up to a minute (free-tier cold start).
+
+![Drawing a digit and reading the prediction](docs/draw-a-digit.gif)
 
 # Handwritten Digit Recognition API
 
@@ -27,19 +26,21 @@ service has no runtime dependency on any model registry or object store.
 |---|---|
 | Architecture | `Sequential`: 784 → Dense 512 (ReLU) → Dropout → Dense 256 (ReLU) → Dropout → Dense 10 (softmax) |
 | Parameters | 535,818 |
-| Input | flattened 28×28 grayscale, scaled to 0–1 |
+| Input | flattened 28×28 grayscale, scaled to 0-1 |
 | Artifact | `models/final_fc_model.keras` (6.2 MB, Keras 3.13.2) |
 | Framework | TensorFlow 2.21 / Keras 3.15 (CPU-only build) |
 
 The network is a from-scratch dense classifier rather than a convolutional one; the
 accompanying notebook benchmarks it against a CNN baseline.
 
+`models/final_fc_model.keras` is committed on purpose, so the API runs without retraining.
+
 ---
 
 ## Why `preprocessing.py` is a separate module
 
 The single most common way a model that scored well in a notebook produces garbage in
-production is **training/serving skew** — the server preprocessing images differently
+production is **training/serving skew** - the server preprocessing images differently
 from how training did. Nothing crashes; the model just quietly gets worse.
 
 The defence here is structural: training and serving both import the *same*
@@ -59,7 +60,7 @@ surfaces as HTTP 422.
 
 ### `POST /predict`
 
-Request — `pixels` must be exactly 28×28, values 0–255:
+Request - `pixels` must be exactly 28×28, values 0-255:
 
 ```json
 { "pixels": [[0, 0, 0, "... 28 values ..."], "... 28 rows ..."] }
@@ -141,14 +142,17 @@ python smoke_test.py https://mnist-live.onrender.com
 ```
 ├── DSA8401_Neural_Networks_MNIST.ipynb   the full study: training, analysis, and deployment
 ├── serve.py               FastAPI app: loads the model once at startup, serves /health and /predict
-├── preprocessing.py       THE shared transform — imported by both training and serving
+├── preprocessing.py       THE shared transform - imported by both training and serving
 ├── smoke_test.py          end-to-end check against any running instance
 ├── sample_digit.json      one real MNIST test digit (index 0, label 7) used as a fixture
 ├── models/
-│   └── final_fc_model.keras
+│   └── final_fc_model.keras   committed on purpose so the API runs without retraining
 ├── static/index.html      draw-a-digit front end, calls /predict with relative URLs
+├── docs/draw-a-digit.gif  the draw-a-digit page, captured locally
+├── README.spaces.md       Hugging Face Space card metadata (sdk: docker, app_port 7860)
 ├── Dockerfile             python:3.11-slim, non-root, listens on 7860
 ├── render.yaml            Render service definition
+├── .github/workflows/ci.yml   builds the image, starts it, runs smoke_test.py
 ├── requirements.txt       exact pins, CPU-only TensorFlow
 └── DEPLOYMENT.md          live URL, commit SHA, and verified curl transcripts
 ```
@@ -181,8 +185,8 @@ production by the mechanism designed for it in Section 9.
 
 Deployed on **Render** (free tier) as a Docker web service, built from the `Dockerfile`
 in this repo. Render injects `$PORT` at runtime and the container honours it, falling
-back to 7860 — the port Hugging Face Spaces expects and the `app_port` declared in the
-front matter above — so the same image runs on either host without modification.
+back to 7860, the port Hugging Face Spaces expects and the `app_port` in
+`README.spaces.md`, so the same image runs on either host without modification.
 
 `DEPLOYMENT.md` records the live URL, the deployed commit SHA, and the exact
 verification commands with their real responses.
